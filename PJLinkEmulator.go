@@ -130,6 +130,7 @@ func (re PJLinkDevice) set_power_thermal_status() {
 			re._PJLinkPower = POWER_OFF
 		}
 	}
+	log.Println("POWER state:", re._PJLinkPower)
 	return
 }
 
