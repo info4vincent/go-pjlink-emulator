@@ -99,7 +99,7 @@ type PJLinkDevice struct {
 	_deviceThermalAtTime time.Time
 }
 
-func (re PJLinkDevice) turn_power_on() {
+func (re *PJLinkDevice) turn_power_on() {
 	if re._warmingUpDuration == 0 {
 		re._PJLinkPower = POWER_ON
 	} else {
@@ -108,7 +108,7 @@ func (re PJLinkDevice) turn_power_on() {
 	}
 }
 
-func (re PJLinkDevice) turn_power_off() {
+func (re *PJLinkDevice) turn_power_off() {
 	if re._warmingUpDuration == 0 {
 		re._PJLinkPower = POWER_OFF
 	} else {
@@ -117,7 +117,7 @@ func (re PJLinkDevice) turn_power_off() {
 	}
 }
 
-func (re PJLinkDevice) set_power_thermal_status() {
+func (re *PJLinkDevice) set_power_thermal_status() {
 	switch re._PJLinkPower {
 	case POWER_ON:
 	case POWER_OFF:
