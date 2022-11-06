@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -80,8 +81,8 @@ const (
 	INPUT_NETWORK_9 = 59
 )
 
-// Projector store
-type Projector struct {
+// PJLinkDevice store
+type PJLinkDevice struct {
 	_PJLinkUseAuthentication bool
 
 	_PJLinkPower     int
@@ -93,14 +94,51 @@ type Projector struct {
 	_port            int
 
 	_deviceCreatedAtTime time.Time
+	_coolingDownDuration time.Duration
+	_warmingUpDuration   time.Duration
+	_deviceThermalAtTime time.Time
+}
+
+func (re PJLinkDevice) turn_power_on() {
+	if re._warmingUpDuration == 0 {
+		re._PJLinkPower = POWER_ON
+	} else {
+		re._PJLinkPower = POWER_WARMING
+		re._deviceThermalAtTime = time.Now()
+	}
+}
+
+func (re PJLinkDevice) turn_power_off() {
+	if re._warmingUpDuration == 0 {
+		re._PJLinkPower = POWER_OFF
+	} else {
+		re._PJLinkPower = POWER_COOLING
+		re._deviceThermalAtTime = time.Now()
+	}
+}
+
+func (re PJLinkDevice) set_power_thermal_status() {
+	switch re._PJLinkPower {
+	case POWER_ON:
+	case POWER_OFF:
+	case POWER_WARMING:
+		if re._deviceThermalAtTime.Add(re._warmingUpDuration).Before(time.Now()) {
+			re._PJLinkPower = POWER_ON
+		}
+	case POWER_COOLING:
+		if re._deviceThermalAtTime.Add(re._coolingDownDuration).Before(time.Now()) {
+			re._PJLinkPower = POWER_OFF
+		}
+	}
+	return
 }
 
 // NewProjector instance with defaults
-func NewProjector() Projector {
+func NewProjector() PJLinkDevice {
 	rand.Seed(time.Now().UnixNano())
-	generatedName := "Emulator " + fmt.Sprint(rand.Intn(999-1)+1)
+	generatedName := "Projector Emulator " + fmt.Sprint(rand.Intn(999-1)+1)
 
-	projector := Projector{}
+	projector := PJLinkDevice{}
 	projector._PJLinkName = generatedName
 	projector._PJLinkPower = POWER_OFF
 	projector._PJLinkInput = INPUT_DIGITAL_1
@@ -109,8 +147,29 @@ func NewProjector() Projector {
 	projector._port = 4352
 
 	projector._deviceCreatedAtTime = time.Now()
+	projector._coolingDownDuration = time.Duration(12 * time.Second)
+	projector._warmingUpDuration = time.Duration(6 * time.Second)
 
 	return projector
+}
+
+func NewDisplay() PJLinkDevice {
+	rand.Seed(time.Now().UnixNano())
+	generatedName := "Display Emulator " + fmt.Sprint(rand.Intn(999-1)+1)
+
+	display := PJLinkDevice{}
+	display._PJLinkName = generatedName
+	display._PJLinkPower = POWER_OFF
+	display._PJLinkInput = INPUT_DIGITAL_1
+	display._PJLinkAVMute = AVMUTE_UNMUTE_BOTH
+	display._PJLinkLampHours = -1
+	display._port = 4352
+
+	display._deviceCreatedAtTime = time.Now()
+	display._coolingDownDuration = 0
+	display._warmingUpDuration = 0
+
+	return display
 }
 
 type cache struct {
@@ -127,9 +186,21 @@ var InvalidCommand = []byte("Invalid Command") // = ERR 4
 func main() {
 
 	log.SetOutput(os.Stdout)
-	aProjector := NewProjector()
-	log.Println("Started emulating a PJLink device (projector/display) with Name : " + aProjector._PJLinkName)
-	listener, err := net.Listen("tcp", ":"+fmt.Sprint(aProjector._port))
+
+	isDisplayPtr := flag.Bool("display", false,
+		"Emulate a display")
+	flag.Parse()
+
+	aDevice := NewProjector()
+	if *isDisplayPtr == true {
+		fmt.Print("Will emulate a display...")
+		aDevice = NewDisplay()
+	} else {
+		fmt.Print("Will emulate a projector...")
+	}
+
+	log.Println("Started emulating a PJLink device (projector/display) with Name : " + aDevice._PJLinkName)
+	listener, err := net.Listen("tcp", ":"+fmt.Sprint(aDevice._port))
 	if err != nil {
 		panic(err)
 	}
@@ -144,13 +215,12 @@ func main() {
 		log.Println("Accepted ", conn.RemoteAddr())
 		conn.Write([]byte("PJLINK 0\r"))
 
-		//create a routine dont block
-		go handleConnection(conn, aProjector)
+		//create a routine don't block
+		go handleConnection(conn, aDevice)
 	}
-
 }
 
-func handleConnection(conn net.Conn, projector Projector) {
+func handleConnection(conn net.Conn, projector PJLinkDevice) {
 	defer conn.Close()
 
 	s := bufio.NewReader(conn)
@@ -175,7 +245,7 @@ func handleConnection(conn net.Conn, projector Projector) {
 	}
 }
 
-func handleCommand(inp string, conn net.Conn, projector *Projector) {
+func handleCommand(inp string, conn net.Conn, pjLinkDevice *PJLinkDevice) {
 
 	if len(inp) <= 0 || inp[0] != '%' {
 		conn.Write(InvalidCommand)
@@ -186,25 +256,32 @@ func handleCommand(inp string, conn net.Conn, projector *Projector) {
 
 	switch command {
 	case "%1POWR ?":
-		get(command, fmt.Sprint(projector._PJLinkPower), conn)
+		pjLinkDevice.set_power_thermal_status()
+		get(command, fmt.Sprint(pjLinkDevice._PJLinkPower), conn)
 	case "%1POWR 1":
-		projector._PJLinkPower = POWER_ON
+		pjLinkDevice.turn_power_on()
 		replyOK(command, conn)
 	case "%1POWR 0":
-		projector._PJLinkPower = POWER_OFF
+		pjLinkDevice.turn_power_off()
 		replyOK(command, conn)
 	case "%1NAME ?":
-		get(command, fmt.Sprint(projector._PJLinkName), conn)
+		get(command, fmt.Sprint(pjLinkDevice._PJLinkName), conn)
 	case "%1LAMP ?":
-		hoursInUse := math.Round(time.Now().Sub(projector._deviceCreatedAtTime).Seconds())
-		remainingHours := projector._PJLinkLampHours - int(math.Mod(hoursInUse, float64(projector._PJLinkLampHours)))
-		get(command, fmt.Sprint(remainingHours), conn)
+		if pjLinkDevice._PJLinkLampHours == -1 {
+			// No lamp available:
+			// Returning PJLink 'NoLamp' result (See README.md PJLink Class 2, PDF)
+			replyERR1(command, conn)
+		} else {
+			hoursInUse := math.Round(time.Now().Sub(pjLinkDevice._deviceCreatedAtTime).Seconds())
+			remainingHours := pjLinkDevice._PJLinkLampHours - int(math.Mod(hoursInUse, float64(pjLinkDevice._PJLinkLampHours)))
+			get(command, fmt.Sprint(remainingHours), conn)
+		}
 	case "%1INPT ?":
-		get(command, fmt.Sprint(projector._PJLinkInput), conn)
+		get(command, fmt.Sprint(pjLinkDevice._PJLinkInput), conn)
 	default:
 		if strings.HasPrefix(command, "%1INPT ") == true {
 			newInputSource, _ := strconv.Atoi(strings.TrimPrefix(command, "%1INPT "))
-			projector._PJLinkInput = newInputSource
+			pjLinkDevice._PJLinkInput = newInputSource
 			replyOK(command, conn)
 			break
 		}
@@ -217,7 +294,12 @@ func handleCommand(inp string, conn net.Conn, projector *Projector) {
 
 func replyOK(cmd string, conn net.Conn) {
 	str := strings.Split(cmd, " ")
-	conn.Write([]byte(str[0] + "= OK"))
+	conn.Write([]byte(str[0] + "=OK"))
+}
+
+func replyERR1(cmd string, conn net.Conn) {
+	str := strings.Split(cmd, " ")
+	conn.Write([]byte(str[0] + "=ERR1"))
 }
 
 func get(cmd string, value string, conn net.Conn) {
