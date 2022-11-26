@@ -97,9 +97,12 @@ type PJLinkDevice struct {
 	_coolingDownDuration time.Duration
 	_warmingUpDuration   time.Duration
 	_deviceThermalAtTime time.Time
+	sync.Mutex           // wraps a synchronization flag
 }
 
 func (re *PJLinkDevice) turn_power_on() {
+	re.Lock()
+	defer re.Unlock()
 	if re._warmingUpDuration == 0 {
 		re._PJLinkPower = POWER_ON
 	} else {
@@ -109,6 +112,8 @@ func (re *PJLinkDevice) turn_power_on() {
 }
 
 func (re *PJLinkDevice) turn_power_off() {
+	re.Lock()
+	defer re.Unlock()
 	if re._warmingUpDuration == 0 {
 		re._PJLinkPower = POWER_OFF
 	} else {
@@ -118,6 +123,8 @@ func (re *PJLinkDevice) turn_power_off() {
 }
 
 func (re *PJLinkDevice) set_power_thermal_status() {
+	re.Lock()
+	defer re.Unlock()
 	switch re._PJLinkPower {
 	case POWER_ON:
 	case POWER_OFF:
@@ -132,6 +139,19 @@ func (re *PJLinkDevice) set_power_thermal_status() {
 	}
 	log.Println("POWER state:", re._PJLinkPower)
 	return
+}
+
+func (re *PJLinkDevice) set_input_source(newSource int) {
+	re.Lock()
+	defer re.Unlock()
+	if newSource < INPUT_RGB_1 || newSource > INPUT_NETWORK_9 {
+		log.Println("Error source is invalid:", newSource)
+		return
+	}
+	re._PJLinkInput = newSource
+	log.Println("SOURCE:", re._PJLinkInput)
+	return
+
 }
 
 // NewProjector instance with defaults
@@ -173,19 +193,11 @@ func NewDisplay() PJLinkDevice {
 	return display
 }
 
-type cache struct {
-	data map[string]string
-	*sync.RWMutex
-}
-
-var c = cache{data: make(map[string]string), RWMutex: &sync.RWMutex{}}
-
 // When a invalid PJLink command is received (Projector/Display failure)
 // TODO (IMplement according PJLink spec)
 var InvalidCommand = []byte("Invalid Command") // = ERR 4
 
 func main() {
-
 	log.SetOutput(os.Stdout)
 
 	isDisplayPtr := flag.Bool("display", false,
@@ -216,12 +228,11 @@ func main() {
 		log.Println("Accepted ", conn.RemoteAddr())
 		conn.Write([]byte("PJLINK 0\r"))
 
-		//create a routine don't block
-		go handleConnection(conn, aDevice)
+		go handleConnection(conn, &aDevice)
 	}
 }
 
-func handleConnection(conn net.Conn, projector PJLinkDevice) {
+func handleConnection(conn net.Conn, projector *PJLinkDevice) {
 	defer conn.Close()
 
 	s := bufio.NewReader(conn)
@@ -242,7 +253,7 @@ func handleConnection(conn net.Conn, projector PJLinkDevice) {
 			return
 		}
 
-		handleCommand(data, conn, &projector)
+		handleCommand(data, conn, projector)
 	}
 }
 
@@ -282,7 +293,8 @@ func handleCommand(inp string, conn net.Conn, pjLinkDevice *PJLinkDevice) {
 	default:
 		if strings.HasPrefix(command, "%1INPT ") == true {
 			newInputSource, _ := strconv.Atoi(strings.TrimPrefix(command, "%1INPT "))
-			pjLinkDevice._PJLinkInput = newInputSource
+
+			pjLinkDevice.set_input_source(newInputSource)
 			replyOK(command, conn)
 			break
 		}
