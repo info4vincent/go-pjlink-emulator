@@ -9,6 +9,10 @@ pjlink device emulator written in GO
 - Lamp life time (Simulated)
 - Input switching
 
+## Fixes:
+
+- Keep device state after socket close.
+
 ## Working setup
 
 Emulator is validated against, PJLink Class 1:
