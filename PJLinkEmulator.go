@@ -91,6 +91,7 @@ type PJLinkDevice struct {
 	_PJLinkError     int
 	_PJLinkLampHours int
 	_PJLinkName      string
+	_PJLinkClass     int
 	_port            int
 
 	_deviceCreatedAtTime time.Time
@@ -165,6 +166,7 @@ func NewProjector() PJLinkDevice {
 	projector._PJLinkInput = INPUT_DIGITAL_1
 	projector._PJLinkAVMute = AVMUTE_UNMUTE_BOTH
 	projector._PJLinkLampHours = 30000
+	projector._PJLinkClass = 2 // Projectors can also be of class 1
 	projector._port = 4352
 
 	projector._deviceCreatedAtTime = time.Now()
@@ -184,6 +186,7 @@ func NewDisplay() PJLinkDevice {
 	display._PJLinkInput = INPUT_DIGITAL_1
 	display._PJLinkAVMute = AVMUTE_UNMUTE_BOTH
 	display._PJLinkLampHours = -1
+	display._PJLinkClass = 1 // Can displays also be of class 2 ?
 	display._port = 4352
 
 	display._deviceCreatedAtTime = time.Now()
@@ -290,6 +293,8 @@ func handleCommand(inp string, conn net.Conn, pjLinkDevice *PJLinkDevice) {
 		}
 	case "%1INPT ?":
 		get(command, fmt.Sprint(pjLinkDevice._PJLinkInput), conn)
+	case "%1CLSS ?":
+		get(command, fmt.Sprint(pjLinkDevice._PJLinkClass), conn)
 	default:
 		if strings.HasPrefix(command, "%1INPT ") == true {
 			newInputSource, _ := strconv.Atoi(strings.TrimPrefix(command, "%1INPT "))
