@@ -8,6 +8,7 @@ pjlink device emulator written in GO
 - Name
 - Lamp life time (Simulated)
 - Input switching
+- Class query of protocol version
 
 ## Fixes:
 
@@ -15,7 +16,7 @@ pjlink device emulator written in GO
 
 ## Working setup
 
-Emulator is validated against, PJLink Class 1:
+Emulator is validated against, PJLink Class 1 and 2:
 https://pjlink.jbmia.or.jp/english/index.html
 
 Software PJLink Test tool version 2.0.1.0.190508:
