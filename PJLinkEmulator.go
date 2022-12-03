@@ -330,4 +330,5 @@ func get(cmd string, value string, conn net.Conn) {
 	ret := strings.Replace(cmd, " ?", "="+value+"\r", 1)
 
 	conn.Write([]byte(ret))
+	log.Println("send : ", ret)
 }
