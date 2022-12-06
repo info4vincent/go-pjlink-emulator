@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+// Version should be provided during build go build
+// $ go build -ldflags "-X main.Version 1.3"
+var Version = "No Version Provided"
+
 const (
 	POWER_OFF     = 0
 	POWER_ON      = 1
@@ -202,6 +206,7 @@ var InvalidCommand = []byte("Invalid Command") // = ERR 4
 
 func main() {
 	log.SetOutput(os.Stdout)
+	log.Default().Println("Application version :", Version)
 
 	isDisplayPtr := flag.Bool("display", false,
 		"Emulate a display")
@@ -221,6 +226,8 @@ func main() {
 		panic(err)
 	}
 
+	go start_udpServer(aDevice._port)
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -233,6 +240,32 @@ func main() {
 
 		go handleConnection(conn, &aDevice)
 	}
+}
+
+func start_udpServer(port int) {
+	// listen to incoming udp packets
+	udpServer, err := net.ListenPacket("udp", ":"+fmt.Sprint(port))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer udpServer.Close()
+
+	for {
+		buf := make([]byte, 1024)
+		_, addr, err := udpServer.ReadFrom(buf)
+		if err != nil {
+			continue
+		}
+		go response(udpServer, addr, buf)
+	}
+
+}
+
+func response(udpServer net.PacketConn, addr net.Addr, buf []byte) {
+	time := time.Now().Format(time.ANSIC)
+	responseStr := fmt.Sprintf("time received: %v. Your message: %v!", time, string(buf))
+
+	udpServer.WriteTo([]byte(responseStr), addr)
 }
 
 func handleConnection(conn net.Conn, projector *PJLinkDevice) {
