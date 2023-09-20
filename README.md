@@ -1,3 +1,4 @@
+[![Board Status](https://dev.azure.com/ALMP-ORG-P01/4beb804a-d723-49ea-b9e1-bc360124b3e7/90f09c14-11be-494b-b116-d725ee917424/_apis/work/boardbadge/20805e31-098d-4933-b907-e706bcb6b0cd)](https://dev.azure.com/ALMP-ORG-P01/4beb804a-d723-49ea-b9e1-bc360124b3e7/_boards/board/t/90f09c14-11be-494b-b116-d725ee917424/Philips.PlanningCategory)
 # go-pjlink-emulator
 
 pjlink device emulator written in GO
